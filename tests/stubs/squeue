@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Fake squeue: fixture $FAKE_ROOT/jobs/<id> holds one SLURM state per line; each squeue
+# call advances to the next line (the last line repeats). Like the real command it
+# prints a state only while the job is queued or running.
+set -u
+job=""
+while [ $# -gt 0 ]; do
+  case $1 in
+    -j) shift; job=$1 ;;
+  esac
+  shift
+done
+echo "squeue $job" >> "$FAKE_ROOT/calls.log"
+fix="$FAKE_ROOT/jobs/$job"
+# squeue_fail: the controller cannot be reached. squeue_purged: SLURM has forgotten the
+# job (it says "Invalid job id" and exits 1, as the real squeue does for old jobs).
+[ ! -e "$FAKE_ROOT/squeue_fail" ] || {
+  echo "slurm_load_jobs error: Unable to contact slurm controller (connect failure)" >&2; exit 1; }
+[ ! -e "$FAKE_ROOT/squeue_purged" ] || { echo "slurm_load_jobs error: Invalid job id specified" >&2; exit 1; }
+[ -f "$fix" ] || { echo "slurm_load_jobs error: Invalid job id specified" >&2; exit 1; }
+n=0
+[ ! -f "$fix.tick" ] || n=$(cat "$fix.tick")
+state=$(sed -n "$((n + 1))p" "$fix")
+[ -n "$state" ] || state=$(tail -n 1 "$fix")
+echo $((n + 1)) > "$fix.tick"
+case $state in
+  PENDING|RUNNING|CONFIGURING|COMPLETING|SUSPENDED) echo "$state" ;;
+esac
+exit 0

@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Fake sleep: never waits, only records the request.
+set -u
+echo "sleep $1" >> "$FAKE_ROOT/sleeps.log"

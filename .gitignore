@@ -1,0 +1,4 @@
+# Your real settings and the local job history stay out of Git.
+config.env
+state/*
+!state/.gitkeep

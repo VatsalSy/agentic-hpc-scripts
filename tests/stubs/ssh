@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Fake ssh: logs the call, then runs the "remote" command locally with the other stubs
+# first on PATH. Create $FAKE_ROOT/ssh_fail to simulate a dead connection, or put a word
+# in $FAKE_ROOT/ssh_lose_ack to lose the reply of commands containing it.
+set -u
+while [ $# -gt 0 ]; do
+  case $1 in
+    -o) shift 2 ;;
+    -*) shift ;;
+    *) break ;;
+  esac
+done
+host=$1
+shift
+cmd=$*
+echo "ssh $host :: $cmd" >> "$FAKE_ROOT/calls.log"
+[ ! -e "$FAKE_ROOT/ssh_fail" ] || { echo "ssh: connect failed (stub)" >&2; exit 255; }
+# ssh_lose_ack holds a word: a command containing it runs, but its reply is lost and ssh
+# exits 255, like a connection that drops after sbatch accepted the job.
+if [ -s "$FAKE_ROOT/ssh_lose_ack" ]; then
+  case $cmd in
+    *"$(cat "$FAKE_ROOT/ssh_lose_ack")"*)
+      bash -c "$cmd" > /dev/null 2>&1
+      echo "ssh: Connection reset by peer (stub)" >&2
+      exit 255 ;;
+  esac
+fi
+# ssh_hook_once holds a script that runs once, just before the first status query
+# (squeue), to simulate another process acting while this poll is in flight.
+if [ -s "$FAKE_ROOT/ssh_hook_once" ]; then
+  case $cmd in
+    *squeue*) hook="$FAKE_ROOT/ssh_hook_once.run"; mv "$FAKE_ROOT/ssh_hook_once" "$hook"; bash "$hook"; rm -f "$hook" ;;
+  esac
+fi
+exec bash -c "$cmd"

@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Fake sacct: prints the state squeue just looked at (same fixture and tick counter).
+set -u
+job=""
+fmt=""
+while [ $# -gt 0 ]; do
+  case $1 in
+    -j) shift; job=$1 ;;
+    -o) shift; fmt=$1 ;;
+  esac
+  shift
+done
+echo "sacct $job" >> "$FAKE_ROOT/calls.log"
+[ ! -e "$FAKE_ROOT/sacct_fail" ] || { echo "sacct: error: Problem talking to the database" >&2; exit 1; }
+fix="$FAKE_ROOT/jobs/$job"
+[ -f "$fix" ] || exit 0
+n=1
+[ ! -f "$fix.tick" ] || n=$(cat "$fix.tick")
+[ "$n" -ge 1 ] || n=1
+state=$(sed -n "${n}p" "$fix")
+[ -n "$state" ] || state=$(tail -n 1 "$fix")
+# <id>.rows: several accounting rows at once (a job array), one State per line.
+if [ "$fmt" = "State" ] && [ -f "$fix.rows" ]; then cat "$fix.rows"; exit 0; fi
+if [ "$fmt" = "State" ]; then echo "$state"; else echo "$job  $state  00:00:01"; fi

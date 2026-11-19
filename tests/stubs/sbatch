@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Fake sbatch: needs the script in the current directory, prints the next job ID
+# (1000, 1001, ...). Create $FAKE_ROOT/sbatch_cluster_suffix to print "ID;cluster",
+# sbatch_garbage to print an unparsable reply (the job is still created).
+set -u
+script=""
+while [ $# -gt 0 ]; do
+  case $1 in
+    -*) shift ;;
+    *) script=$1; shift ;;
+  esac
+done
+echo "sbatch $script" >> "$FAKE_ROOT/calls.log"
+[ -f "$script" ] || { echo "sbatch: error: Unable to open file $script" >&2; exit 1; }
+n=1000
+[ ! -f "$FAKE_ROOT/next_jobid" ] || n=$(cat "$FAKE_ROOT/next_jobid")
+echo $((n + 1)) > "$FAKE_ROOT/next_jobid"
+# sbatch_break_state holds the path of the local log: right after accepting the job the
+# stub swaps that file for a directory, so the caller's next write to it fails. The
+# test puts the file back afterwards.
+if [ -s "$FAKE_ROOT/sbatch_break_state" ]; then
+  f=$(cat "$FAKE_ROOT/sbatch_break_state")
+  mv "$f" "$f.bak"
+  mkdir "$f"
+fi
+if [ -e "$FAKE_ROOT/sbatch_garbage" ]; then echo "$n && echo pwned"; exit 0; fi
+if [ -e "$FAKE_ROOT/sbatch_cluster_suffix" ]; then echo "$n;fakecluster"; else echo "$n"; fi
